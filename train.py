@@ -72,12 +72,6 @@ if __name__=="__main__":
     # TODO: Remove spatial correlation in data
     pickle_off = open("pickled_body_pos_active", "rb")
     active_data = pickle.load(pickle_off)
-    for d in active_data:
-        # indices 8 and 11 are the right and left hip locations
-        hip_avg_x = (d[0][8] + d[0][11]) / 2.0      # substracting the average of hip x dist
-        hip_avg_y = (d[1][8] + d[1][11]) / 2.0      # substracting the average hip height
-        d[0] = [x - hip_avg_x for x in d[0]]
-        d[1] = [y - hip_avg_y for y in d[1]]
 
     pickle_off = open("pickled_body_pos_not_active", "rb")
     not_active_data = pickle.load(pickle_off)
@@ -174,7 +168,7 @@ if __name__=="__main__":
 
         print('    Finish training this EPOCH, start evaluating...')
         train_loss, train_acc = eval_net(inputs, targets)
-        test_loss, test_acc = eval_net(inputs, targets)
+        test_loss, test_acc = eval_net(test_inputs, test_targets)
 
         print('EPOCH: %d train_loss: %.5f train_acc: %.5f test_loss: %.5f test_acc %.5f' %
               (epoch + 1, train_loss, train_acc, test_loss, test_acc))
