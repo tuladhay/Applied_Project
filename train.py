@@ -7,7 +7,12 @@ from torch.autograd import Variable
 import numpy as np
 
 #######################################################################################################################
-
+class SaveVal():
+    def __init__(self):
+        self.testLoss = []
+        self.trainLoss = []
+        self.trainAcc = []
+        self.testAcc = []
 
 # DEFINE THE NEURAL NETWORK
 class MLP(nn.Module):
@@ -51,20 +56,6 @@ def eval_net(inputs, targets):
     return total_loss / total, correct / total
 
 
-
-def iterate_minibatches(inputs, targets, batchsize, shuffle=False):
-    # assert inputs.shape[0] == targets.shape[0]
-    if shuffle:
-        indices = np.arange(inputs.shape[0])
-        np.random.shuffle(indices)
-    for start_idx in range(0, inputs.shape[0] - batchsize + 1, batchsize):
-        if shuffle:
-            excerpt = indices[start_idx:start_idx + batchsize]
-        else:
-            excerpt = slice(start_idx, start_idx + batchsize)
-        yield inputs[excerpt], targets[excerpt]
-
-
 if __name__=="__main__":
     ####################################################################################################################
     #               LOADING AND PRE-PROCESSING THE DATA THAT I HAVE COLLECTED
@@ -75,6 +66,21 @@ if __name__=="__main__":
 
     pickle_off = open("pickled_body_pos_not_active", "rb")
     not_active_data = pickle.load(pickle_off)
+
+    # REMOVING SPATIAL VARIANCE
+    for n in range(len(active_data)):
+        # indices 8 and 11 are the right and left hip locations
+         hip_avg_x = (active_data[n][0][8] + active_data[n][0][11]) / 2.0  # substracting the average of hip x dist
+         hip_avg_y = (active_data[n][1][8] + active_data[n][1][11]) / 2.0  # substracting the average hip height
+         active_data[n][0] = [x - hip_avg_x for x in active_data[n][0]]
+         active_data[n][1] = [y - hip_avg_y for y in active_data[n][1]]
+
+    for n in range(len(not_active_data)):
+        # indices 8 and 11 are the right and left hip locations
+         hip_avg_x = (not_active_data[n][0][8] + not_active_data[n][0][11]) / 2.0  # substracting the average of hip x dist
+         hip_avg_y = (not_active_data[n][1][8] + not_active_data[n][1][11]) / 2.0  # substracting the average hip height
+         not_active_data[n][0] = [x - hip_avg_x for x in not_active_data[n][0]]
+         not_active_data[n][1] = [y - hip_avg_y for y in not_active_data[n][1]]
 
     dataset = active_data + not_active_data
     inputs = []
@@ -104,20 +110,40 @@ if __name__=="__main__":
     ####################################################################################################################
     # Similarly, load the test inputs and targets
     # TODO: Combine into the same file and save it. Then do a 80:20 split while loading
-    # TODO: Remove spatial correlation in data
+    # TODO: Refactor them into functions?
     active_data = []
     not_active_data = []
     temp = []
 
-    with open("pickled_body_pos_active_test", 'rb') as f:
-        active_data = pickle.load(f, encoding='latin1')
-    with open("pickled_body_pos_not_active_test", 'rb') as f:
-        not_active_data = pickle.load(f, encoding='latin1')
+    # some wierd encoding this I had to do because this set of data was captured using Python2 pickle,
+    # whereas the previous (train) data was captured using Python3 pickle
 
-    # pickle_off = open("pickled_body_pos_active_test", "rb")
-    # active_data = pickle.load(pickle_off)
-    # pickle_off = open("pickled_body_pos_not_active_test", "rb")
-    # not_active_data = pickle.load(pickle_off)
+    # with open("pickled_body_pos_active_test_fixed_error", 'rb') as f:
+    #     active_data = pickle.load(f, encoding='latin1')
+    with open("pickled_body_pos_not_active_test", 'rb') as f:
+         not_active_data = pickle.load(f, encoding='latin1')
+        # this part was saved in python2
+
+    pickle_off = open("pickled_body_pos_active_test_fixed_error.p", "rb")
+    active_data = pickle.load(pickle_off)
+    # This part was originally saved in python2, but I fixed some error and re-saved it using python3
+
+
+    # REMOVING SPATIAL VARIANCE
+    for n in range(len(active_data)):
+        # indices 8 and 11 are the right and left hip locations
+        hip_avg_x = (active_data[n][0][8] + active_data[n][0][11]) / 2.0  # substracting the average of hip x dist
+        hip_avg_y = (active_data[n][1][8] + active_data[n][1][11]) / 2.0  # substracting the average hip height
+        active_data[n][0] = [x - hip_avg_x for x in active_data[n][0]]
+        active_data[n][1] = [y - hip_avg_y for y in active_data[n][1]]
+
+    for n in range(len(not_active_data)):
+        # indices 8 and 11 are the right and left hip locations
+        hip_avg_x = (not_active_data[n][0][8] + not_active_data[n][0][
+            11]) / 2.0  # substracting the average of hip x dist
+        hip_avg_y = (not_active_data[n][1][8] + not_active_data[n][1][11]) / 2.0  # substracting the average hip height
+        not_active_data[n][0] = [x - hip_avg_x for x in not_active_data[n][0]]
+        not_active_data[n][1] = [y - hip_avg_y for y in not_active_data[n][1]]
 
     test_dataset = active_data + not_active_data
     test_inputs = []
@@ -141,11 +167,13 @@ if __name__=="__main__":
 
 
 
-    num_epochs = 50
+    num_epochs = 20
+    save = SaveVal()
 
     net = MLP()
     net.train()
     optimizer = optim.Adam(net.parameters())
+    optimizer.zero_grad()
     criterion = nn.MSELoss()
 
     print("\nStart Training")
@@ -154,6 +182,11 @@ if __name__=="__main__":
     targets = Variable(targets)
     test_inputs = Variable(test_inputs)
     test_targets = Variable(test_targets)
+
+    train_loss, train_acc = eval_net(inputs, targets)
+    test_loss, test_acc = eval_net(test_inputs, test_targets)
+    print('EPOCH: %d train_loss: %.5f train_acc: %.5f test_loss: %.5f test_acc %.5f' %
+          (0, train_loss, train_acc, test_loss, test_acc))
 
     for epoch in range(num_epochs):
         running_loss = 0.0
@@ -166,11 +199,16 @@ if __name__=="__main__":
             loss.backward()
             optimizer.step()
 
-        print('    Finish training this EPOCH, start evaluating...')
+        # print('    Finish training this EPOCH, start evaluating...')
         train_loss, train_acc = eval_net(inputs, targets)
         test_loss, test_acc = eval_net(test_inputs, test_targets)
 
         print('EPOCH: %d train_loss: %.5f train_acc: %.5f test_loss: %.5f test_acc %.5f' %
               (epoch + 1, train_loss, train_acc, test_loss, test_acc))
+        save.trainLoss.append(train_loss)
+        save.trainAcc.append(train_acc)
+        save.testLoss.append(test_loss)
+        save.testAcc.append(test_acc)
 
+    pickle.dump(save, open("train_test_results.p", "wb"))
     print("Finished Training")
