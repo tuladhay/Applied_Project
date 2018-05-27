@@ -88,6 +88,7 @@ if __name__ == '__main__':
         '''
         all_x_pos = []
         all_y_pos = []
+        state = "Trying to detect one human"
         label = 0    # 1 for active, 0 for non active
         for human in humans:
             print(len(human.body_parts))
@@ -121,9 +122,11 @@ if __name__ == '__main__':
                 classification = out[0].float()
 		print("Classification = " + str(classification.data[0]))
                 if (classification.data[0]> 0.5):
-                    print("Human is ready")
+                    #print("Human is ready")
+                    state = "Human is READY"
                 else:
-                    print("Human is not ready")		
+                    state = "Human is NOT READY"
+                    #print("Human is not ready")		
                 #dataset.append([all_x_pos, all_y_pos, label])
 
 
@@ -138,6 +141,12 @@ if __name__ == '__main__':
                     "FPS: %f" % (1.0 / (time.time() - fps_time)),
                     (10, 10),  cv2.FONT_HERSHEY_SIMPLEX, 0.5,
                     (0, 255, 0), 2)
+        
+        cv2.putText(image,
+                    state,
+                    (200, 30),  cv2.FONT_HERSHEY_SIMPLEX, 0.7,
+                    (0, 0, 255), 2)
+
         cv2.imshow('tf-pose-estimation result', image)
         fps_time = time.time()
         if cv2.waitKey(1) == 27:
